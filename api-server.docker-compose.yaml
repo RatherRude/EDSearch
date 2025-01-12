@@ -35,7 +35,7 @@ services:
         # Install curl so we can execute the request.
         apk add --no-cache curl >/dev/null 2>&1 &&
         # Append a cron entry to the root crontab.
-        echo '0 6 * * * curl -X POST http://ingest-worker:5000/ingest -H "Content-Type: application/json" -d '{"url":"https://downloads.spansh.co.uk/galaxy_populated.json.gz"}' > /etc/crontabs/root &&
+        echo '0 6 * * * curl -X POST http://ingest-worker:5000/ingest -H "Content-Type: application/json" -d \'{"url":"https://downloads.spansh.co.uk/galaxy_populated.json.gz"}\'' > /etc/crontabs/root &&
         # Run cron in the foreground, at log level 2.
         crond -f -l 2
       "
