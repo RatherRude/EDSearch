@@ -1,6 +1,10 @@
+import trace
+import traceback
 import requests
 import ijson
 import gzip
+import fastapi
+from concurrent.futures import ThreadPoolExecutor
 
 from .lib.Database import (
     body_to_tables,
@@ -70,6 +74,7 @@ def ingest_item(item: dict):
     except Exception as e:
         print("Error inserting", item["name"], e)
         print(item)
+        traceback.print_exc()
         # raise e
         return
 
@@ -101,6 +106,11 @@ def ingest(url: str):
     create_tables()
     print("initialized!")
 
+    # setup task pool
+    print("initializing task pool...")
+    pool = ThreadPoolExecutor(10)
+    print("initialized!")
+
     # Stream download from URL
     print("Downloading galaxy data...")
     response = requests.get(url, stream=True)
@@ -110,9 +120,9 @@ def ingest(url: str):
     # Wrap the response with gzip decompression
     with gzip.GzipFile(fileobj=response.raw, mode="r") as f:
         for item in ijson.items(f, "item", use_float=True):
-            ingest_item(item)
+            # ingest_item(item)
+            pool.submit(ingest_item, item)
 
-    db.close()
     print("Done ingesting!")
 
 
@@ -120,9 +130,8 @@ if __name__ == "__main__":
     # url = "https://downloads.spansh.co.uk/galaxy_1day.json.gz"
     # url = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
     # url = "http://localhost:8080/galaxy_populated.json.gz"
-
-    import fastapi
-    from concurrent.futures import ThreadPoolExecutor
+    ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
+    exit(0)
 
     executor = ThreadPoolExecutor(2)
     app = fastapi.FastAPI()

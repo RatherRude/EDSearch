@@ -583,7 +583,7 @@ def system_to_tables(system: System):
                 "security": system.get("security"),
                 "population": system.get("population", 0),
                 "bodyCount": system.get("bodyCount", 0),
-                "controllingFaction": system.get("controllingFaction").get("name"),
+                "controllingFaction": system.get("controllingFaction", {}).get("name"),
                 # "controllingFaction_allegiance": system.get("controllingFaction").get("allegiance"),
                 # "controllingFaction_government": system.get("controllingFaction").get("government"),
                 # "controllingFaction_influence": system.get("controllingFaction",{}).get("influence"),
