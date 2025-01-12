@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
+from .queries.Settings import SearchContext, SearchPreferences
+
 from .queries.Station import SearchStationsArgs, api_search_stations
 from .queries.StationCommodities import (
     SearchMarketCommoditiesArgs,
@@ -33,7 +35,7 @@ def parse_arguments(
         messages=[
             {
                 "role": "system",
-                "content": "You are a search engine for the Game Elite Dangerous.",
+                "content": "You are a search engine for the Game Elite Dangerous. Call the appropriate function to search for the user's query. Use the context and state for default values.",
             },
             {
                 "role": "user",
@@ -60,7 +62,16 @@ def parse_arguments(
                 "type": "function",
                 "function": {
                     "name": tool_name,
-                    "parameters": tool_parameters.model_json_schema(),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": tool_parameters.model_json_schema(),
+                            "preferences": SearchPreferences.model_json_schema(),
+                            "context": SearchContext.model_json_schema(),
+                        },
+                        "required": ["query", "preferences", "context"],
+                        "additionalProperties": False,
+                    },
                     "strict": strict,
                 },
             }
@@ -74,7 +85,12 @@ def parse_arguments(
         print(response.choices[0].message)
         return {"error": "no_tool_calls"}
 
-    return json.loads(response.choices[0].message.tool_calls[0].function.arguments)
+    args = json.loads(response.choices[0].message.tool_calls[0].function.arguments)
+    return (
+        args["query"],
+        args["preferences"],
+        args["context"],
+    )
 
 
 def search_systems(
@@ -86,7 +102,7 @@ def search_systems(
 def search_stations(
     query: str, context: list[dict], state: dict[str, dict], found_entities: list[dict]
 ) -> dict:
-    arguments = parse_arguments(
+    (arguments, preference, context) = parse_arguments(
         "api_search_market_modules",
         SearchStationsArgs,
         query,
@@ -99,7 +115,6 @@ def search_stations(
         del arguments["station_name"]
 
     defaults = SearchStationsArgs(
-        reference_system=state.get("Location", {}).get("StarSystem", None),
         system_name=None,
         station_name=None,
         station_type=None,
@@ -112,7 +127,9 @@ def search_stations(
     )
 
     result = api_search_stations(
-        SearchStationsArgs.model_validate({**defaults.model_dump(), **arguments})
+        SearchStationsArgs.model_validate({**defaults.model_dump(), **arguments}),
+        preferences=SearchPreferences.model_validate(preference),
+        context=SearchContext.model_validate(context),
     )
     return result
 
@@ -156,7 +173,7 @@ def search_engineering_materials(
 def search_market_modules(
     query: str, context: list[dict], state: dict[str, dict], found_entities: list[dict]
 ) -> dict:
-    arguments = parse_arguments(
+    (arguments, preference, context) = parse_arguments(
         "api_search_market_modules",
         SearchMarketModulesArgs,
         query,
@@ -165,14 +182,18 @@ def search_market_modules(
         found_entities,
     )
     print(arguments)
-    result = api_search_market_module(SearchMarketModulesArgs.model_validate(arguments))
+    result = api_search_market_module(
+        SearchMarketModulesArgs.model_validate(arguments),
+        preferences=SearchPreferences.model_validate(preference),
+        context=SearchContext.model_validate(context),
+    )
     return result
 
 
 def search_market_commodities(
     query: str, context: list[dict], state: dict[str, dict], found_entities: list[dict]
 ) -> dict:
-    arguments = parse_arguments(
+    (arguments, preferences, context) = parse_arguments(
         "api_search_market_commodities",
         SearchMarketCommoditiesArgs,
         query,
@@ -182,7 +203,9 @@ def search_market_commodities(
     )
     print(arguments, context, state)
     result = api_search_market_commodities(
-        SearchMarketCommoditiesArgs.model_validate(arguments)
+        SearchMarketCommoditiesArgs.model_validate(arguments),
+        preferences=SearchPreferences.model_validate(preferences),
+        context=SearchContext.model_validate(context),
     )
     return result
 
@@ -190,7 +213,7 @@ def search_market_commodities(
 def search_market_ships(
     query: str, context: list[dict], state: dict[str, dict], found_entities: list[dict]
 ) -> dict:
-    arguments = parse_arguments(
+    (arguments, preference, context) = parse_arguments(
         "api_search_market_ships",
         SearchMarketShipsArgs,
         query,
@@ -199,7 +222,11 @@ def search_market_ships(
         found_entities,
     )
 
-    result = api_search_market_ships(SearchMarketShipsArgs.model_validate(arguments))
+    result = api_search_market_ships(
+        SearchMarketShipsArgs.model_validate(arguments),
+        preferences=SearchPreferences.model_validate(preference),
+        context=SearchContext.model_validate(context),
+    )
     return result
 
 
