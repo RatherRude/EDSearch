@@ -1,33 +1,64 @@
 from difflib import get_close_matches
+from typing import Any, Literal
+
+EntityType = Literal[
+    "services",
+    "commodities",
+    "modules",
+    "materials",
+    "ships",
+    "allegiances",
+    "economies",
+    "powers",
+    "power_states",
+    "station_types",
+    "securities",
+    "governments",
+    "faction_states",
+]
+
+
+def autocorrect(type: EntityType, v: str, default: Any = None):
+    l = known_entities.get(type, [])
+    matches = get_close_matches(v, l, n=1)
+    if matches:
+        return matches[0]
+    return default
 
 
 def find_entities(query: str):
-    entity_categories: dict[str,str] = {
-        'services': 'Services are provided by stations.',
-        'commodities': 'Commodities are traded at a stations market.',
-        'modules': 'Modules are sold at a stations outfitting.',
-        'materials': 'Materials are used for engineering and can be traded at stations with a "Material Trader" service.',
-        'ships': 'Ships are sold at a stations shipyard.',
-        'allegiances': 'Allegiances describe the political allegiance of a system and their stations.',
-        'economies': 'Economies describe the economic activity of a system or a station.',
-        'powers': 'Powers are the political leaders controlling systems and their stations.',
-        'power_states': 'Power states describe the kind of control a power has over a system and their stations.',
-        "station_types": 'Station types describe the type of a station.',
-        "securities": 'Securities describe the security level of a system and their stations.',
-        "governments": 'Governments describe the form of government a system and their stations are under.',
-        "faction_states": 'Faction states describe the state the faction controlling a system and their stations is in.',
+    entity_categories: dict[str, str] = {
+        "services": "Services are provided by stations.",
+        "commodities": "Commodities are traded at a stations market.",
+        "modules": "Modules are sold at a stations outfitting.",
+        "materials": 'Materials are used for engineering and can be traded at stations with a "Material Trader" service.',
+        "ships": "Ships are sold at a stations shipyard.",
+        "allegiances": "Allegiances describe the political allegiance of a system and their stations.",
+        "economies": "Economies describe the economic activity of a system or a station.",
+        "powers": "Powers are the political leaders controlling systems and their stations.",
+        "power_states": "Power states describe the kind of control a power has over a system and their stations.",
+        "station_types": "Station types describe the type of a station.",
+        "securities": "Securities describe the security level of a system and their stations.",
+        "governments": "Governments describe the form of government a system and their stations are under.",
+        "faction_states": "Faction states describe the state the faction controlling a system and their stations is in.",
     }
-    
+
     found_entities: list[dict] = []
-    
-    words = query.replace('?','').split()
+
+    words = query.replace("?", "").split()
     # two word entities
     for i in range(len(words) - 1):
-        word = query.split()[i] + ' ' + query.split()[i + 1]
-        for (category, entities) in known_entities.items():
+        word = query.split()[i] + " " + query.split()[i + 1]
+        for category, entities in known_entities.items():
             matches = get_close_matches(word, entities)
             if matches:
-                found_entities.append({'category': category, 'description': entity_categories.get(category, None), 'examples': matches})
+                found_entities.append(
+                    {
+                        "category": category,
+                        "description": entity_categories.get(category, None),
+                        "examples": matches,
+                    }
+                )
                 try:
                     words.pop(i)
                     words.pop(i)
@@ -35,19 +66,25 @@ def find_entities(query: str):
                     pass
     # single word entities
     for word in words:
-        for (category, entities) in known_entities.items():
+        for category, entities in known_entities.items():
             matches = get_close_matches(word, entities)
             if matches:
-                found_entities.append({'category': category, 'description': entity_categories.get(category, None), 'examples': matches})
+                found_entities.append(
+                    {
+                        "category": category,
+                        "description": entity_categories.get(category, None),
+                        "examples": matches,
+                    }
+                )
                 try:
                     words.pop(words.index(word))
                 except:
                     pass
-    
+
     return found_entities
 
 
-known_entities = {
+known_entities: dict[EntityType, list[str]] = {
     "station_types": [
         "Asteroid base",
         "Coriolis Starport",
@@ -58,7 +95,7 @@ known_entities = {
         "Outpost",
         "Planetary Outpost",
         "Planetary Port",
-        "Settlement"
+        "Settlement",
     ],
     "modules": [
         "AX Missile Rack",
@@ -176,7 +213,7 @@ known_entities = {
         "Torpedo Pylon",
         "Universal Multi Limpet Controller",
         "Xeno Multi Limpet Controller",
-        "Xeno Scanner"
+        "Xeno Scanner",
     ],
     "materials": [
         "Aberrant Shield Pattern Analysis",
@@ -353,7 +390,7 @@ known_entities = {
         "Wreckage Components",
         "Yttrium",
         "Zinc",
-        "Zirconium"
+        "Zirconium",
     ],
     "commodities": [
         "Advanced Catalysers",
@@ -750,7 +787,7 @@ known_entities = {
         "Xenobiological Prison Pod",
         "Xihe Biomorphic Companions",
         "Yaso Kondi Leaf",
-        "Zeessze Ant Grub Glue"
+        "Zeessze Ant Grub Glue",
     ],
     "ships": [
         "Adder",
@@ -792,7 +829,7 @@ known_entities = {
         "Type-9 Heavy",
         "Viper MkIII",
         "Viper MkIV",
-        "Vulture"
+        "Vulture",
     ],
     "services": [
         "Apex Interstellar",
@@ -821,7 +858,7 @@ known_entities = {
         "Social Space",
         "Technology Broker",
         "Universal Cartographics",
-        "Vista Genomics"
+        "Vista Genomics",
     ],
     "allegiances": [
         "Alliance",
@@ -829,14 +866,9 @@ known_entities = {
         "Federation",
         "Independent",
         "Pilots Federation",
-        "Thargoid"
+        "Thargoid",
     ],
-    "securities": [
-        "High",
-        "Medium",
-        "Low",
-        "Anarchy"
-    ],
+    "securities": ["High", "Medium", "Low", "Anarchy"],
     "economies": [
         "Agriculture",
         "Colony",
@@ -853,7 +885,7 @@ known_entities = {
         "Rescue",
         "Service",
         "Terraforming",
-        "Tourism"
+        "Tourism",
     ],
     "governments": [
         "Anarchy",
@@ -869,7 +901,7 @@ known_entities = {
         "Prison",
         "Prison Colony",
         "Private Ownership",
-        "Theocracy"
+        "Theocracy",
     ],
     "powers": [
         "A. Lavigny-Duval",
@@ -884,7 +916,7 @@ known_entities = {
         "Pranav Antal",
         "Yuri Grom",
         "Zachary Hudson",
-        "Zemina Torval"
+        "Zemina Torval",
     ],
     "power_states": [
         "Contested",
@@ -895,7 +927,7 @@ known_entities = {
         "Prepared",
         "Stronghold",
         "Turmoil",
-        "Unoccupied"
+        "Unoccupied",
     ],
     "faction_states": [
         "Expansion",
@@ -917,6 +949,6 @@ known_entities = {
         "Terrorist Attack",
         "Famine",
         "Blight",
-        "Public Holiday"
-    ]
+        "Public Holiday",
+    ],
 }

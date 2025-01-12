@@ -5,7 +5,8 @@ from typing import TypedDict
 import psycopg
 import numpy as np
 from pgvector.psycopg import register_vector
-from psycopg.rows import dict_row
+from psycopg.rows import DictRow, dict_row
+from psycopg_pool import ConnectionPool
 
 
 class Coords(TypedDict):
@@ -334,22 +335,51 @@ CREATE TABLE IF NOT EXISTS systems_powers (
 );
 """
 
-conn = None
+pool = ConnectionPool(
+    os.getenv(
+        "DATABASE_URL",
+        "dbname=edsearch user=postgres password=password host=localhost",
+    ),
+    open=True,
+)
 
 
 def get_pg_connection():
-    global conn
-    if not conn:
-        conn = psycopg.connect(
-            os.getenv(
-                "DATABASE_URL",
-                "dbname=edsearch user=postgres password=password host=localhost",
-            ),
-        )
-        register_vector(conn)
+    conn = pool.getconn()
+    register_vector(conn)
     cur = conn.cursor(row_factory=dict_row)
     cur.execute("SET hnsw.ef_search = 100;")
     return conn, cur
+
+
+# self closing get_pg_connection using with statement
+class pg_connection(object):
+    def __init__(self) -> None:
+        self.conn: psycopg.Connection = (
+            None  # pyright: ignore[reportAttributeAccessIssue]
+        )
+        self.cur: psycopg.Cursor[DictRow] = (
+            None  # pyright: ignore[reportAttributeAccessIssue]
+        )
+        pass
+
+    def __enter__(self):
+        self.conn = pool.getconn()
+        register_vector(self.conn)
+        self.cur = self.conn.cursor(row_factory=dict_row)
+        self.cur.execute("SET hnsw.ef_search = 100;")
+        return self.conn, self.cur
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.cur:
+            self.cur.close()
+        if self.conn:
+            self.conn.commit()
+        if pool and self.conn:
+            pool.putconn(self.conn)  # pyright: ignore[reportArgumentType]
+        self.conn = None  # pyright: ignore[reportAttributeAccessIssue]
+        self.cur = None  # pyright: ignore[reportAttributeAccessIssue]
+        return False
 
 
 def create_tables():
@@ -362,13 +392,19 @@ def create_tables():
     cur = conn.cursor()
     cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
     register_vector(conn)
-    cur.execute(create_systems_table)
-    cur.execute(create_systems_factions_table)
-    cur.execute(create_bodies_table)
-    cur.execute(create_stations_table)
-    cur.execute(create_stations_market_commodities_table)
-    cur.execute(create_stations_shipyard_ships_table)
-    cur.execute(create_stations_outfitting_modules_table)
+    cur.execute(create_systems_table)  # pyright: ignore[reportArgumentType]
+    cur.execute(create_systems_factions_table)  # pyright: ignore[reportArgumentType]
+    cur.execute(create_bodies_table)  # pyright: ignore[reportArgumentType]
+    cur.execute(create_stations_table)  # pyright: ignore[reportArgumentType]
+    cur.execute(
+        create_stations_market_commodities_table  # pyright: ignore[reportArgumentType]
+    )
+    cur.execute(
+        create_stations_shipyard_ships_table  # pyright: ignore[reportArgumentType]
+    )
+    cur.execute(
+        create_stations_outfitting_modules_table  # pyright: ignore[reportArgumentType]
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -471,7 +507,9 @@ def station_to_tables(station: Station):
                     "name": module["name"],
                     "symbol": module["symbol"],
                     "moduleId": module["moduleId"],
-                    "class": module["class"],
+                    "class": module[
+                        "class"
+                    ],  # pyright: ignore[reportGeneralTypeIssues]
                     "rating": module["rating"],
                     "category": module["category"],
                 }

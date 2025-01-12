@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, final
 
 from .Api import app
 
@@ -39,8 +39,8 @@ class SearchInput(BaseModel):
     state: dict[str, Any]
     context: list[Any]
 
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "query": "sell 20 tons of gold",
                 "context": [],
@@ -57,10 +57,7 @@ class SearchInput(BaseModel):
                 },
             }
         }
-
-
-class SearchResult(BaseModel, extra="allow"):
-    pass
+    }
 
 
 class SearchOutput(BaseModel):
@@ -68,7 +65,7 @@ class SearchOutput(BaseModel):
     possible_entities: list[Any]
     query: str
     sources: dict[str, bool]
-    results: dict[str, SearchResult]
+    results: dict[str, Any]
 
 
 @app.post("/search", response_model=SearchOutput)
@@ -76,7 +73,7 @@ async def search_endpoint(body: SearchInput):
     results = search.run(**body.dict())
     if not results:
         raise HTTPException(status_code=404, detail="No Results")
-    return JSONResponse(content=results)
+    return results
 
 
 if __name__ == "__main__":

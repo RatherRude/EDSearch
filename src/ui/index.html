@@ -43,20 +43,22 @@
                 query_input.disabled = true;
                 results_output.textContent = 'searching...';
                 const state = JSON.parse(state_input.value);
-                const response = await fetch('/search', {
+                const results = await fetch('/search', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({query, context: [], state})
-                });
-                const results = await response.json();
+                }).then(res=>res.ok?res.json():res.text(), err=>err.message);
                 
                 results_output.textContent = JSON.stringify(results, null, 2);
                 query_input.disabled = false;
             }
             state_input.value = JSON.stringify({Location: {StarSystem: "Ochosi", Station: "Perry's Folly"}, ShipInfo: {Name: "Jenny", Type: "empire_courier", Cargo: 30.2, CargoCapacity: 100, MaximumJumpRange: 50.628967, LandingPadSize: "S"}}, null, 2);
             search_button.addEventListener('click', search);
+            query_input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') search();
+            });
         </script>
     </head>
     <body>

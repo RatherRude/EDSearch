@@ -30,12 +30,13 @@ services:
 
   ingest-cron:
     image: alpine:latest
+    configs:
+      - source: CronTab
+        target: /etc/crontabs/root
     command: >
       sh -c "
         # Install curl so we can execute the request.
         apk add --no-cache curl >/dev/null 2>&1 &&
-        # Append a cron entry to the root crontab.
-        echo '0 6 * * * curl -X POST http://ingest-worker:5000/ingest -H "Content-Type: application/json" -d \'{"url":"https://downloads.spansh.co.uk/galaxy_populated.json.gz"}\'' > /etc/crontabs/root &&
         # Run cron in the foreground, at log level 2.
         crond -f -l 2
       "
@@ -49,6 +50,7 @@ services:
       dockerfile: postgres.dockerfile
     volumes:
       - db-data:/var/lib/postgresql/data
+    shm_size: 1g
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
@@ -78,7 +80,10 @@ services:
 #      - ingest-worker
 #      - pgadmin
 #
-#configs:
+configs:
+  CronTab:
+    content: |
+      0 6 * * * curl -X POST http://ingest-worker:5000/ingest -H "Content-Type: application/json" -d '{"url":"https://downloads.spansh.co.uk/galaxy_populated.json.gz"}'
 #  Caddyfile:
 #    content: |
 #      ${EDSEARCH_DOMAIN:-localhost} {
