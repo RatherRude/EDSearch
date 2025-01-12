@@ -367,7 +367,7 @@ class pg_connection(object):
         self.conn = pool.getconn()
         register_vector(self.conn)
         self.cur = self.conn.cursor(row_factory=dict_row)
-        self.cur.execute("SET hnsw.ef_search = 100;")
+        self.cur.execute("SET hnsw.ef_search = 1000;")
         return self.conn, self.cur
 
     def __exit__(self, exc_type, exc_value, traceback):
