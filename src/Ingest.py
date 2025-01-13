@@ -1,3 +1,4 @@
+import sys
 from threading import Semaphore
 import traceback
 import requests
@@ -17,87 +18,106 @@ from .lib.Database import (
 
 def ingest_item(item: dict):
     print("Ingesting system:", item["name"])
-    item["id"] = item["id64"]
+    try:
+        item["id"] = item["id64"]
 
-    station_docs = item.pop("stations", [])
-    # item["station_ids"] = [station["id"] for station in station_docs]
-    for station in station_docs:
-        station["systemId"] = item["id64"]
-        station["systemName"] = item["name"]
-        station["id"] = station["id"]
-        station["coords"] = item["coords"]
-
-        if not "landingPads" in station:
-            station["landingPads"] = {"small": 0, "medium": 0, "large": 0}
-
-    body_docs = item.pop("bodies", [])
-    # item["body_ids"] = [body["id64"] for body in body_docs]
-    for body in body_docs:
-        body["systemId"] = item["id64"]
-        body["systemName"] = item["name"]
-        body["coords"] = item["coords"]
-        body["id"] = body["id64"]
-        body_stations = body.pop("stations", [])
-
-        for station in body_stations:
+        station_docs = item.pop("stations", [])
+        # item["station_ids"] = [station["id"] for station in station_docs]
+        for station in station_docs:
             station["systemId"] = item["id64"]
             station["systemName"] = item["name"]
-            station["bodyId"] = body["id64"]
-            station["bodyName"] = body["name"]
-            station["coords"] = body["coords"]
             station["id"] = station["id"]
+            station["coords"] = item["coords"]
 
             if not "landingPads" in station:
                 station["landingPads"] = {"small": 0, "medium": 0, "large": 0}
 
-        station_docs.extend(body_stations)
-    # print("Count Bodies:", len(body_docs))
-    # print("Count Stations:", len(station_docs))
-
-    # insert
-    try:
-        tables: dict[str, list[dict]] = {}
-        for table, rows in system_to_tables(item).items():
-            if table not in tables:
-                tables[table] = []
-            tables[table].extend(rows)
-        for station in station_docs:
-            for table, rows in station_to_tables(station).items():
-                if table not in tables:
-                    tables[table] = []
-                tables[table].extend(rows)
+        body_docs = item.pop("bodies", [])
+        # item["body_ids"] = [body["id64"] for body in body_docs]
         for body in body_docs:
-            for table, rows in body_to_tables(body).items():
+            body["systemId"] = item["id64"]
+            body["systemName"] = item["name"]
+            body["coords"] = item["coords"]
+            body["id"] = body["id64"]
+            body_stations = body.pop("stations", [])
+
+            for station in body_stations:
+                station["systemId"] = item["id64"]
+                station["systemName"] = item["name"]
+                station["bodyId"] = body["id64"]
+                station["bodyName"] = body["name"]
+                station["coords"] = body["coords"]
+                station["id"] = station["id"]
+
+                if not "landingPads" in station:
+                    station["landingPads"] = {"small": 0, "medium": 0, "large": 0}
+
+            station_docs.extend(body_stations)
+        # print("Count Bodies:", len(body_docs))
+        # print("Count Stations:", len(station_docs))
+
+        # insert
+        try:
+            tables: dict[str, list[dict]] = {}
+            for table, rows in system_to_tables(item).items():
                 if table not in tables:
                     tables[table] = []
                 tables[table].extend(rows)
-    except Exception as e:
-        print("Error inserting", item["name"], e)
-        print(item)
-        traceback.print_exc()
-        # raise e
-        return
-
-    # db cursor and start transaction
-    with pg_connection() as (conn, cur):
-        # delete system
-        cur.execute(f"DELETE FROM systems WHERE id = %s", (item["id"],))
-        # batch insert
-        try:
-            for table, rows in tables.items():
-                if not rows:
-                    continue
-                cur.executemany(
-                    f"INSERT INTO {table} ({','.join(rows[0].keys())}) VALUES ({','.join(['%s']*len(rows[0].keys()))})",
-                    [tuple(row.values()) for row in rows],
-                )
+            for station in station_docs:
+                for table, rows in station_to_tables(station).items():
+                    if table not in tables:
+                        tables[table] = []
+                    tables[table].extend(rows)
+            for body in body_docs:
+                for table, rows in body_to_tables(body).items():
+                    if table not in tables:
+                        tables[table] = []
+                    tables[table].extend(rows)
         except Exception as e:
-            print("Error inserting", e)
-            print(item)
-            # rollback transaction if error occurs
-            conn.rollback()
+            print("Error inserting", item["name"], e, file=sys.stderr)
+            print(item, file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
             # raise e
-        conn.commit()
+            return
+
+        # db cursor and start transaction
+        with pg_connection() as (conn, cur):
+            # delete system
+            cur.execute(f"DELETE FROM systems WHERE id = %s", (item["id"],))
+            # delete all stations
+            cur.execute(
+                f"DELETE FROM stations WHERE id = ANY(%s)",
+                ([station["id"] for station in station_docs],),
+            )
+            # delete all bodies
+            cur.execute(
+                f"DELETE FROM bodies WHERE id = ANY(%s)",
+                ([body["id"] for body in body_docs],),
+            )
+
+            # batch insert
+            try:
+                for table, rows in tables.items():
+                    if not rows:
+                        continue
+                    cur.executemany(
+                        f"INSERT INTO {table} ({','.join(rows[0].keys())}) VALUES ({','.join(['%s']*len(rows[0].keys()))})",
+                        [tuple(row.values()) for row in rows],
+                    )
+            except Exception as e:
+                print("Error inserting", item["name"], e, file=sys.stderr)
+                print(item, file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+                # rollback transaction if error occurs
+                conn.rollback()
+                # raise e
+            conn.commit()
+
+    except Exception as e:
+        print("Error ingesting", item["name"], e, file=sys.stderr)
+        print(item, file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        # raise e
 
 
 def ingest(url: str):
