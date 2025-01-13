@@ -1,4 +1,4 @@
-import trace
+from threading import Semaphore
 import traceback
 import requests
 import ijson
@@ -109,6 +109,7 @@ def ingest(url: str):
     # setup task pool
     print("initializing task pool...")
     pool = ThreadPoolExecutor(10)
+    semaphores = Semaphore(10)
     print("initialized!")
 
     # Stream download from URL
@@ -120,8 +121,9 @@ def ingest(url: str):
     # Wrap the response with gzip decompression
     with gzip.GzipFile(fileobj=response.raw, mode="r") as f:
         for item in ijson.items(f, "item", use_float=True):
-            # ingest_item(item)
-            pool.submit(ingest_item, item)
+            semaphores.acquire()
+            future = pool.submit(ingest_item, item)
+            future.add_done_callback(lambda _: semaphores.release())
 
     print("Done ingesting!")
 
