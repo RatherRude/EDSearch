@@ -138,12 +138,23 @@ def ingest(url: str):
     response.raise_for_status()
     print("Streaming!")
 
+    total_length = int(response.headers["Content-Length"])
+
+    percentage = 0
     # Wrap the response with gzip decompression
     with gzip.GzipFile(fileobj=response.raw, mode="r") as f:
         for item in ijson.items(f, "item", use_float=True):
+            new_percentage = round(response.raw.tell() * 100 / total_length, 2)
+            if percentage != new_percentage:
+                print(f"Progress: {new_percentage} %")
+                percentage = new_percentage
+
             semaphores.acquire()
             future = pool.submit(ingest_item, item)
             future.add_done_callback(lambda _: semaphores.release())
+
+    print("Wait for all tasks to finish...")
+    pool.shutdown(wait=True)
 
     print("Done ingesting!")
 
@@ -152,8 +163,8 @@ if __name__ == "__main__":
     # url = "https://downloads.spansh.co.uk/galaxy_1day.json.gz"
     # url = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
     # url = "http://localhost:8080/galaxy_populated.json.gz"
-    # ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
-    # exit(0)
+    ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
+    exit(0)
 
     executor = ThreadPoolExecutor(2)
     app = fastapi.FastAPI()
