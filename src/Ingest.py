@@ -82,18 +82,7 @@ def ingest_item(item: dict):
 
         # db cursor and start transaction
         with pg_connection() as (conn, cur):
-            # delete system
             cur.execute(f"DELETE FROM systems WHERE id = %s", (item["id"],))
-            # delete all stations
-            cur.execute(
-                f"DELETE FROM stations WHERE id = ANY(%s)",
-                ([station["id"] for station in station_docs],),
-            )
-            # delete all bodies
-            cur.execute(
-                f"DELETE FROM bodies WHERE id = ANY(%s)",
-                ([body["id"] for body in body_docs],),
-            )
 
             # batch insert
             try:
@@ -149,7 +138,7 @@ def ingest(url: str):
                 print(f"Progress: {new_percentage} %")
                 percentage = new_percentage
 
-            semaphores.acquire()
+            semaphores.acquire(True, 120)
             future = pool.submit(ingest_item, item)
             future.add_done_callback(lambda _: semaphores.release())
 
@@ -160,22 +149,26 @@ def ingest(url: str):
 
 
 if __name__ == "__main__":
-    # url = "https://downloads.spansh.co.uk/galaxy_1day.json.gz"
-    # url = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
-    # url = "http://localhost:8080/galaxy_populated.json.gz"
-    ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
-    exit(0)
+    try:
+        # url = "https://downloads.spansh.co.uk/galaxy_1day.json.gz"
+        # url = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
+        # url = "http://localhost:8080/galaxy_populated.json.gz"
+        ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
+        exit(0)
 
-    executor = ThreadPoolExecutor(2)
-    app = fastapi.FastAPI()
+        executor = ThreadPoolExecutor(2)
+        app = fastapi.FastAPI()
 
-    @app.post("/ingest")
-    def ingest_endpoint(body: dict):
-        executor.submit(ingest, body.get("url"))
-        return {"status": "starting ingestion job", "url": body.get("url")}
+        @app.post("/ingest")
+        def ingest_endpoint(body: dict):
+            executor.submit(ingest, body.get("url"))
+            return {"status": "starting ingestion job", "url": body.get("url")}
 
-    import uvicorn
+        import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=5000)
-
+        uvicorn.run(app, host="0.0.0.0", port=5000)
+    except Exception as e:
+        print(e, file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        exit(2)
 # curl -X POST localhost:5002/ingest -H "Content-Type: application/json" -d '{"url":"https://downloads.spansh.co.uk/galaxy_populated.json.gz"}'
