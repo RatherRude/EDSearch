@@ -1,5 +1,4 @@
 import json
-import readline
 import sys
 from threading import Semaphore
 import traceback
@@ -10,7 +9,7 @@ import fastapi
 from concurrent.futures import ThreadPoolExecutor
 import tracemalloc
 
-from lib.Database import (
+from .lib.Database import (
     body_to_tables,
     create_tables,
     pg_connection,
