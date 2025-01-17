@@ -1,3 +1,5 @@
+import json
+import readline
 import sys
 from threading import Semaphore
 import traceback
@@ -6,8 +8,9 @@ import ijson
 import gzip
 import fastapi
 from concurrent.futures import ThreadPoolExecutor
+import tracemalloc
 
-from .lib.Database import (
+from lib.Database import (
     body_to_tables,
     create_tables,
     pg_connection,
@@ -15,8 +18,11 @@ from .lib.Database import (
     system_to_tables,
 )
 
+snapshot_before = None
 
-def ingest_item(item: dict):
+
+def ingest_item(line: bytes):
+    item = json.loads(line.decode("utf-8").strip().strip(","))
     print("Ingesting system:", item["name"])
     try:
         item["id"] = item["id64"]
@@ -130,16 +136,33 @@ def ingest(url: str):
     total_length = int(response.headers["Content-Length"])
 
     percentage = 0
+    count = 0
+    tracemalloc.start()
     # Wrap the response with gzip decompression
-    with gzip.GzipFile(fileobj=response.raw, mode="r") as f:
-        for item in ijson.items(f, "item", use_float=True):
+    with gzip.GzipFile(fileobj=response.raw, mode="rb") as f:
+        # Read line by line using readline
+        while True:
+            line = f.readline()
+            if not line:
+                break
+            count += 1
+            # if count == 100:
+            #    snapshot_before = tracemalloc.take_snapshot()
+            # if count == 1000:
+            #    snapshot_after = tracemalloc.take_snapshot()
+            #    top_stats = snapshot_after.compare_to(snapshot_before, "lineno")
+            #    print("[ Top 10 differences ]")
+            #    for stat in top_stats[:10]:
+            #        print(stat)
+            #    break
+
             new_percentage = round(response.raw.tell() * 100 / total_length, 2)
             if percentage != new_percentage:
-                print(f"Progress: {new_percentage} %")
+                print(f"Progress: {new_percentage} %, {count} systems")
                 percentage = new_percentage
 
             semaphores.acquire(True, 120)
-            future = pool.submit(ingest_item, item)
+            future = pool.submit(ingest_item, line)
             future.add_done_callback(lambda _: semaphores.release())
 
     print("Wait for all tasks to finish...")
@@ -153,7 +176,7 @@ if __name__ == "__main__":
         # url = "https://downloads.spansh.co.uk/galaxy_1day.json.gz"
         # url = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
         # url = "http://localhost:8080/galaxy_populated.json.gz"
-        ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
+        ingest("http://localhost:8080/galaxy_1day.json.gz")
         exit(0)
 
         executor = ThreadPoolExecutor(2)
