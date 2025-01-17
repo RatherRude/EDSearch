@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import json
 import os
 from typing import TypedDict
@@ -335,12 +336,18 @@ CREATE TABLE IF NOT EXISTS systems_powers (
 );
 """
 
+
+def configure_pool_connection(conn):
+    register_vector(conn)
+
+
 pool = ConnectionPool(
     os.getenv(
         "DATABASE_URL",
         "dbname=edsearch user=postgres password=password host=localhost",
     ),
     open=True,
+    configure=configure_pool_connection,
 )
 
 
@@ -352,34 +359,15 @@ def get_pg_connection():
     return conn, cur
 
 
-# self closing get_pg_connection using with statement
-class pg_connection(object):
-    def __init__(self) -> None:
-        self.conn: psycopg.Connection = (
-            None  # pyright: ignore[reportAttributeAccessIssue]
-        )
-        self.cur: psycopg.Cursor[DictRow] = (
-            None  # pyright: ignore[reportAttributeAccessIssue]
-        )
-        pass
-
-    def __enter__(self):
-        self.conn = pool.getconn()
-        register_vector(self.conn)
-        self.cur = self.conn.cursor(row_factory=dict_row)
-        self.cur.execute("SET hnsw.ef_search = 1000;")
-        return self.conn, self.cur
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if self.cur:
-            self.cur.close()
-        if self.conn:
-            self.conn.commit()
-        if pool and self.conn:
-            pool.putconn(self.conn)  # pyright: ignore[reportArgumentType]
-        self.conn = None  # pyright: ignore[reportAttributeAccessIssue]
-        self.cur = None  # pyright: ignore[reportAttributeAccessIssue]
-        return False
+@contextmanager
+def pg_connection():
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SET hnsw.ef_search = 1000;")
+            try:
+                yield conn, cur
+            finally:
+                conn.commit()
 
 
 def create_tables():

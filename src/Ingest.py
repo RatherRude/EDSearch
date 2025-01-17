@@ -145,9 +145,9 @@ def ingest(url: str):
             if not line:
                 break
             count += 1
-            # if count == 100:
-            #    snapshot_before = tracemalloc.take_snapshot()
             # if count == 1000:
+            #    snapshot_before = tracemalloc.take_snapshot()
+            # if count == 10000:
             #    snapshot_after = tracemalloc.take_snapshot()
             #    top_stats = snapshot_after.compare_to(snapshot_before, "lineno")
             #    print("[ Top 10 differences ]")
@@ -175,7 +175,7 @@ if __name__ == "__main__":
         # url = "https://downloads.spansh.co.uk/galaxy_1day.json.gz"
         # url = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
         # url = "http://localhost:8080/galaxy_populated.json.gz"
-        ingest("http://localhost:8080/galaxy_1day.json.gz")
+        ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
         exit(0)
 
         executor = ThreadPoolExecutor(2)
