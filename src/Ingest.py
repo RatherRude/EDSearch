@@ -62,6 +62,30 @@ def ingest_item(line: bytes):
         # print("Count Bodies:", len(body_docs))
         # print("Count Stations:", len(station_docs))
 
+        for station in station_docs:
+            if "outfitting" in station and station["outfitting"]:
+                if "modules" in station["outfitting"]:
+                    moduleIds = [
+                        module["moduleId"]
+                        for module in station["outfitting"]["modules"]
+                    ]
+                    # find for duplicates
+                    duplicates = []
+                    for moduleId in moduleIds:
+                        if moduleIds.count(moduleId) > 1:
+                            duplicates.append(moduleId)
+
+                    if duplicates:
+                        print(
+                            f"Duplicate modules in station {station['name']} in system {item['name']}: {duplicates}"
+                        )
+                        # remove duplicates
+                        station["outfitting"]["modules"] = [
+                            module
+                            for module in station["outfitting"]["modules"]
+                            if module["moduleId"] not in duplicates
+                        ]
+
         # insert
         try:
             tables: dict[str, list[dict]] = {}
@@ -89,6 +113,16 @@ def ingest_item(line: bytes):
         # db cursor and start transaction
         with pg_connection() as (conn, cur):
             cur.execute(f"DELETE FROM systems WHERE id = %s", (item["id"],))
+            # delete all stations
+            cur.execute(
+                f"DELETE FROM stations WHERE id = ANY(%s)",
+                ([station["id"] for station in station_docs],),
+            )
+            # delete all bodies
+            cur.execute(
+                f"DELETE FROM bodies WHERE id = ANY(%s)",
+                ([body["id"] for body in body_docs],),
+            )
 
             # batch insert
             try:
@@ -145,31 +179,36 @@ def ingest(url: str):
     count = 0
     tracemalloc.start()
     # stream read from gzipped file
-    with gzip.GzipFile(tmpfile, mode="r") as f:
-        # Read line by line using readline
-        while True:
-            line = f.readline()
-            if not line:
-                break
-            count += 1
-            # if count == 1000:
-            #    snapshot_before = tracemalloc.take_snapshot()
-            # if count == 10000:
-            #    snapshot_after = tracemalloc.take_snapshot()
-            #    top_stats = snapshot_after.compare_to(snapshot_before, "lineno")
-            #    print("[ Top 10 differences ]")
-            #    for stat in top_stats[:10]:
-            #        print(stat)
-            #    break
+    with open(tmpfile, "rb") as filein:
+        with gzip.GzipFile(tmpfile, mode="r") as fileunzipped:
+            # Read line by line using readline
+            while True:
+                line = fileunzipped.readline()
+                if not line:
+                    break
+                count += 1
+                # if count == 1000:
+                #    snapshot_before = tracemalloc.take_snapshot()
+                # if count == 10000:
+                #    snapshot_after = tracemalloc.take_snapshot()
+                #    top_stats = snapshot_after.compare_to(snapshot_before, "lineno")
+                #    print("[ Top 10 differences ]")
+                #    for stat in top_stats[:10]:
+                #        print(stat)
+                #    break
 
-            new_percentage = round(f.tell() * 100 / total_length, 2)
-            if percentage != new_percentage:
-                print(f"Progress: {new_percentage} %, {count} systems")
-                percentage = new_percentage
+                uncompressed_frac = filein.tell() / total_length
+                process_frac = (
+                    1  # TODO we need to know the size of the uncompressed file so far
+                )
+                new_percentage = round(uncompressed_frac * process_frac * 100, 2)
+                if percentage != new_percentage:
+                    print(f"Progress: {new_percentage} %, {count} systems")
+                    percentage = new_percentage
 
-            semaphores.acquire(True, 120)
-            future = pool.submit(ingest_item, line)
-            future.add_done_callback(lambda _: semaphores.release())
+                semaphores.acquire(True, 120)
+                future = pool.submit(ingest_item, line)
+                future.add_done_callback(lambda _: semaphores.release())
 
     print("Wait for all tasks to finish...")
     pool.shutdown(wait=True)
@@ -184,8 +223,8 @@ if __name__ == "__main__":
         # url = "https://downloads.spansh.co.uk/galaxy_1day.json.gz"
         # url = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
         # url = "http://localhost:8080/galaxy_populated.json.gz"
-        # ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
-        # exit(0)
+        ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
+        exit(0)
 
         executor = ThreadPoolExecutor(2)
         app = fastapi.FastAPI()
