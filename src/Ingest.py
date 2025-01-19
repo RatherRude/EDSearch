@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import tracemalloc
 import shutil
 
-from lib.Database import (
+from .lib.Database import (
     body_to_tables,
     create_tables,
     pg_connection,
