@@ -162,7 +162,7 @@ def ingest(url: str):
             #        print(stat)
             #    break
 
-            new_percentage = round(response.raw.tell() * 100 / total_length, 2)
+            new_percentage = round(f.tell() * 100 / total_length, 2)
             if percentage != new_percentage:
                 print(f"Progress: {new_percentage} %, {count} systems")
                 percentage = new_percentage
