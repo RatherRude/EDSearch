@@ -3,13 +3,14 @@ import sys
 from threading import Semaphore
 import traceback
 import requests
-import ijson
+import tempfile
 import gzip
 import fastapi
 from concurrent.futures import ThreadPoolExecutor
 import tracemalloc
+import shutil
 
-from .lib.Database import (
+from lib.Database import (
     body_to_tables,
     create_tables,
     pg_connection,
@@ -126,19 +127,25 @@ def ingest(url: str):
     semaphores = Semaphore(10)
     print("initialized!")
 
-    # Stream download from URL
-    print("Downloading galaxy data...")
+    # Create temp folder
+    tmpdir = tempfile.mkdtemp()
+
+    # Download from URL into temp folder
+    print(f"Downloading galaxy data to {tmpdir}...")
+    tmpfile = f"{tmpdir}/input.json.gz"
     response = requests.get(url, stream=True)
     response.raise_for_status()
-    print("Streaming!")
-
+    with open(tmpfile, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
     total_length = int(response.headers["Content-Length"])
+    print(f"Downloaded {total_length} bytes")
 
     percentage = 0
     count = 0
     tracemalloc.start()
-    # Wrap the response with gzip decompression
-    with gzip.GzipFile(fileobj=response.raw, mode="rb") as f:
+    # stream read from gzipped file
+    with gzip.GzipFile(tmpfile, mode="r") as f:
         # Read line by line using readline
         while True:
             line = f.readline()
@@ -168,6 +175,8 @@ def ingest(url: str):
     pool.shutdown(wait=True)
 
     print("Done ingesting!")
+    print("Cleaning up...")
+    shutil.rmtree(tmpdir)
 
 
 if __name__ == "__main__":
@@ -175,8 +184,8 @@ if __name__ == "__main__":
         # url = "https://downloads.spansh.co.uk/galaxy_1day.json.gz"
         # url = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
         # url = "http://localhost:8080/galaxy_populated.json.gz"
-        ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
-        exit(0)
+        # ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
+        # exit(0)
 
         executor = ThreadPoolExecutor(2)
         app = fastapi.FastAPI()
