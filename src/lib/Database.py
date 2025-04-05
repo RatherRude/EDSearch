@@ -336,6 +336,66 @@ CREATE TABLE IF NOT EXISTS systems_powers (
 );
 """
 
+# create materialized view with REFRESH CONCURRENTLY for autocomplete
+create_autocomplete_view = """
+CREATE MATERIALIZED VIEW IF NOT EXISTS autocomplete AS
+
+-- base
+SELECT
+    DISTINCT name, type, systemname, 'station' as kind
+FROM stations
+UNION SELECT
+    DISTINCT name, type, systemname, 'body' as kind
+FROM bodies
+UNION SELECT
+    DISTINCT name, null as type, null as systemname, 'system' as kind
+FROM systems
+
+-- trade
+UNION SELECT
+    DISTINCT name, category as type, null as systemname, 'commodity' as kind
+FROM stations_market_commodities
+UNION SELECT
+    DISTINCT name, category as type, null as systemname, 'module' as kind
+FROM stations_outfitting_modules
+UNION SELECT
+    DISTINCT name, null as type, null as systemname, 'ship' as kind
+FROM stations_shipyard_ships
+
+-- factions
+UNION SELECT
+    DISTINCT name, null as type, null as systemname, 'faction' as kind
+FROM systems_factions
+UNION SELECT
+    DISTINCT allegiance as name, null as type, null as systemname, 'allegiance' as kind
+FROM systems_factions
+UNION SELECT
+    distinct state as name, null as type, null as systemname, 'factionstate' as kind
+FROM systems_factions
+WHERE state is not null
+UNION SELECT
+    distinct government as name, null as type, null as systemname, 'government' as kind
+FROM systems_factions
+WHERE state is not null
+
+-- powers
+UNION SELECT
+    distinct controllingpower as name, null as type, null as systemname, 'power' as kind
+FROM systems WHERE controllingpower is not null
+UNION SELECT
+    distinct power_state as name, null as type, null as systemname, 'powerstate' as kind
+FROM systems
+WHERE power_state is not null
+
+-- economies
+UNION SELECT
+    distinct primaryeconomy as name, null as type, null as systemname, 'economy' as kind
+FROM systems
+WHERE primaryeconomy is not null;
+CREATE INDEX name_gist_idx ON autocomplete USING GIST (name gist_trgm_ops);
+CREATE INDEX name_gin_idx ON autocomplete USING GIN (name gin_trgm_ops);
+"""
+
 
 def configure_pool_connection(conn):
     register_vector(conn)
@@ -379,6 +439,8 @@ def create_tables():
     )
     cur = conn.cursor()
     cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    cur.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
+    cur.execute("CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;")
     register_vector(conn)
     cur.execute(create_systems_table)  # pyright: ignore[reportArgumentType]
     cur.execute(create_systems_factions_table)  # pyright: ignore[reportArgumentType]
@@ -492,9 +554,9 @@ def station_to_tables(station: Station):
             [
                 {
                     "stationId": station["id"],
+                    "moduleId": module["moduleId"],
                     "name": module["name"],
                     "symbol": module["symbol"],
-                    "moduleId": module["moduleId"],
                     "class": module[
                         "class"
                     ],  # pyright: ignore[reportGeneralTypeIssues]

@@ -1,0 +1,2 @@
+# Factions
+Factions are groups of people present in [systems](systems.md) and (stations)[stations.md]. A Station is typically controlled by a faction. A Faction may control the entire system or be a minor faction. The [factions state](faction_states.md) describe the economic, social and political situation of a faction within a system. Different factions use different forms of [governments](governments.md).

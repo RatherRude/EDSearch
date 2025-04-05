@@ -5,6 +5,11 @@ from pydantic import BaseModel
 
 from .lib.queries.Settings import SearchContext, SearchPreferences
 
+from .lib.queries.Autocomplete import (
+    AutocompleteArgs,
+    AutocompleteResult,
+    api_autocomplete,
+)
 from .lib.queries.Station import (
     SearchStationsArgs,
     SearchStationsResult,
@@ -41,6 +46,14 @@ class APIRequest(BaseModel, Generic[T]):
     query: T
     preferences: SearchPreferences
     context: SearchContext
+
+
+@app.post("/autocomplete", response_model=AutocompleteResult)
+async def autocomplete_endpoint(body: AutocompleteArgs):
+    results = api_autocomplete(body)
+    if not results:
+        raise HTTPException(status_code=404, detail="Not found")
+    return results
 
 
 @app.post("/commodities", response_model=SearchMarketCommoditiesResult)

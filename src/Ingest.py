@@ -213,6 +213,10 @@ def ingest(url: str):
     print("Wait for all tasks to finish...")
     pool.shutdown(wait=True)
 
+    print("Refreshing materialized views...")
+    with pg_connection() as (conn, cur):
+        cur.execute("REFRESH MATERIALIZED VIEW autocomplete CONCURRENTLY;")
+
     print("Done ingesting!")
     print("Cleaning up...")
     shutil.rmtree(tmpdir)
@@ -223,8 +227,8 @@ if __name__ == "__main__":
         # url = "https://downloads.spansh.co.uk/galaxy_1day.json.gz"
         # url = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
         # url = "http://localhost:8080/galaxy_populated.json.gz"
-        ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
-        exit(0)
+        #ingest("https://downloads.spansh.co.uk/galaxy_1day.json.gz")
+        #exit(0)
 
         executor = ThreadPoolExecutor(2)
         app = fastapi.FastAPI()
