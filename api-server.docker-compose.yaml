@@ -1,0 +1,128 @@
+version: "3.7"
+
+services:
+  api-server:
+    build:
+      context: .
+      dockerfile: api-server.dockerfile
+    ports:
+      - "127.0.0.1:5001:5000"
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: dbname=edsearch user=postgres password=password host=postgres port=5432
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+    develop:
+      watch:
+        - action: rebuild
+          path: ./src
+
+  ingest-worker:
+    build:
+      context: .
+      dockerfile: api-server.dockerfile
+    ports:
+      - "127.0.0.1:5002:5000"
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: dbname=edsearch user=postgres password=password host=postgres port=5432
+    command: ["python3", "-m", "src.Ingest"]
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+    develop:
+      watch:
+        - action: rebuild
+          path: ./src
+
+  ingest-cron:
+    image: alpine:latest
+    configs:
+      - source: CronTab
+        target: /etc/crontabs/root
+    command: >
+      sh -c "
+        # Install curl so we can execute the request.
+        apk add --no-cache curl >/dev/null 2>&1 &&
+        # Run cron in the foreground, at log level 2.
+        crond -f -l 2
+      "
+    restart: unless-stopped
+    depends_on:
+      - ingest-worker
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+
+  postgres:
+    build:
+      context: .
+      dockerfile: postgres.dockerfile
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    shm_size: 1g
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: edsearch
+    ports:
+      - "127.0.0.1:5432:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@localhost.lan
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+    ports:
+      - "127.0.0.1:5050:80"
+    depends_on:
+      - postgres
+    configs:
+      - source: PGAdmin
+        target: /pgadmin4/servers.json
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+
+configs:
+  CronTab:
+    content: |
+      0 6 * * * curl -X POST http://ingest-worker:5000/ingest -H "Content-Type: application/json" -d '{"url":"https://downloads.spansh.co.uk/galaxy_populated.json.gz"}'
+  PGAdmin:
+    content: |
+      {
+        "Servers": {
+          "1": {
+            "Name": "EDSearch",
+            "Group": "Server Group 1",
+            "Port": 5432,
+            "Username": "postgres",
+            "Host": "postgres",
+            "SSLMode": "prefer",
+            "MaintenanceDB": "postgres"
+          }
+        }
+      }
+
+volumes:
+  db-data:
