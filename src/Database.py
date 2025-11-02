@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import os
+import time
 
 import psycopg
 from pgvector.psycopg import register_vector
@@ -41,6 +42,16 @@ def pg_connection():
 
 
 def create_tables(table_statements: list[str], drop: bool) -> None:
+    while True:
+        try:
+            conn = psycopg.connect(conninfo)
+            conn.close()
+            break
+        except Exception:
+            print("Waiting for database to be available...")
+            time.sleep(1)
+            continue
+        
     conn = psycopg.connect(conninfo)
     cur = conn.cursor()
     
