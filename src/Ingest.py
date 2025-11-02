@@ -277,10 +277,11 @@ datasets: dict[str, dict[str, Any]] = {
 }
 
 # Accepts /ingest/{day} or /ingest/{day}/{model} with model optional
+@app.post("/ingest/today")
 @app.post("/ingest/{day}")
 @app.post("/ingest/{day}/{model}")
 async def ingest_for_day(
-    day: date,
+    day: date | None = None,
     model: str | None = None
 ):
     """
@@ -288,6 +289,8 @@ async def ingest_for_day(
     If model is not provided, ingests all models.
     """
     reports = {}
+    if not day:
+        day = date.today()
     if model:
         if model not in datasets:
             return {"status": "error", "message": f"Model {model} not found."}

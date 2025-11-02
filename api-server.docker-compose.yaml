@@ -107,7 +107,7 @@ services:
 configs:
   CronTab:
     content: |
-      0 6 * * * curl -X POST http://ingest-worker:5000/ingest -H "Content-Type: application/json" -d '{"url":"https://downloads.spansh.co.uk/galaxy_populated.json.gz"}'
+      0 6 * * * curl -X POST http://ingest-worker:5000/ingest/today
   PGAdmin:
     content: |
       {
